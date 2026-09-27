@@ -77,6 +77,10 @@ export type PtySpawnOptions = {
   isNewSession?: boolean
   /** Host setting forwarded additively to the process owner; old owners ignore it. */
   historyIsolationEnabled?: boolean
+  /** Incognito ("no-session") terminal: suppress ALL on-disk scrollback persistence for this session
+   *  (no terminal-history dir, output.log or checkpoint.json). The live in-memory buffer is unaffected,
+   *  so `terminal read` still works; only durable capture is skipped. Old owners ignore it. */
+  incognito?: boolean
   /** Attach the named session atomically or fail without creating a process. */
   attachOnly?: boolean
   /** Exact persisted owner expected by an attach-only routing decision. */

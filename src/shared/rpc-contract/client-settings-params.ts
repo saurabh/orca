@@ -94,6 +94,12 @@ export const SettingsUpdate = z
       .unknown()
       .transform((value) => normalizeDisabledTuiAgents(value))
       .optional(),
+    // Agents whose terminals are incognito ("no-session") by default. Reuses the TuiAgent-array
+    // normalizer; a per-terminal `--no-session` (or its absence) always overrides this.
+    terminalIncognitoAgents: z
+      .unknown()
+      .transform((value) => normalizeDisabledTuiAgents(value))
+      .optional(),
     agentDefaultArgs: z
       .unknown()
       .transform((value) => normalizeTuiAgentArgsRecord(value))

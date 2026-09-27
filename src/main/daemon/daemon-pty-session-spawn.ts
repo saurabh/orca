@@ -63,6 +63,15 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   }
 
   protected withHistoryIsolation(opts: PtySpawnOptions): PtySpawnOptions {
+    if (opts.incognito) {
+      // Incognito ("no-session"): keep the shell's own command history off disk too (overriding any
+      // per-worktree HISTFILE isolation), and expose ORCA_INCOGNITO so the inner program — e.g. a
+      // private AI CLI — can detect it is private. Bash/zsh honor HISTFILE=/dev/null; HISTSIZE=0 is belt.
+      return {
+        ...opts,
+        env: { ...opts.env, ORCA_INCOGNITO: '1', HISTFILE: '/dev/null', HISTSIZE: '0' }
+      }
+    }
     const wslContext = resolveWslSessionContext({
       cwd: opts.cwd,
       sessionId: opts.sessionId,

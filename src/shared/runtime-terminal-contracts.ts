@@ -27,6 +27,9 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
+  /** True when this terminal is incognito ("no-session"): its scrollback is not recorded to disk.
+   *  Absent/false means normal recording. Surfaced so consumers can show nothing is being captured. */
+  incognito?: boolean
   /** Host-resolved agent identity for action consumers; absent when unknown or unsupported. */
   agentIdentity?: TuiAgent
   /** Absent while running or when the host predates the field; never infer a clean finish. */
@@ -277,6 +280,8 @@ export type RuntimeTerminalCreate = {
   ptyId?: string | null
   worktreeId: string
   title: string | null
+  /** True when the created terminal is incognito ("no-session"): scrollback is not recorded to disk. */
+  incognito?: boolean
   executionHostId?: ExecutionHostId
   hostPlatform?: NodeJS.Platform
   surface?: 'background' | 'visible'

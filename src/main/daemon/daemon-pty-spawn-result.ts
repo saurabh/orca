@@ -237,6 +237,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         cwd: effectiveCwd ?? '',
         cols: effectiveCols,
         rows: effectiveRows,
+        ...(opts.incognito ? { incognito: true } : {}),
         ...(recoveryFreeze ? { recoveryFreeze } : {}),
         ...(historyRecovery.unreadableSessionId === sessionId
           ? { quarantineUnreadableRecovery: true }

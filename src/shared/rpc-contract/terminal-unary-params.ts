@@ -181,6 +181,9 @@ export const TerminalCreateParams = z.object({
     })
     .optional(),
   title: OptionalString,
+  // Incognito ("no-session"): suppress on-disk scrollback for this terminal. Omitting it defers to the
+  // per-agent default; an explicit boolean overrides that default.
+  incognito: z.boolean().optional(),
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),
   activate: z.unknown().optional(),

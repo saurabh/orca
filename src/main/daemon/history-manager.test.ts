@@ -229,6 +229,59 @@ describe('HistoryManager', () => {
     })
   })
 
+  describe('incognito ("no-session") sessions', () => {
+    it('writes no session directory, output.log or checkpoint.json for an incognito session', async () => {
+      const sessionId = 'incognito-1'
+      await mgr.openSession(sessionId, { cwd: '/home/user', cols: 80, rows: 24, incognito: true })
+      // Increments and a checkpoint must be silently dropped, not persisted.
+      await mgr.appendIncrements(sessionId, 1, [{ kind: 'output', data: 'secret output\r\n' }])
+      await mgr.checkpoint(sessionId, makeSnapshot({ snapshotAnsi: 'secret output\r\n' }))
+
+      const sessionDir = join(dir, getHistorySessionDirName(sessionId))
+      expect(existsSync(sessionDir)).toBe(false)
+      expect(existsSync(sessionPath(dir, sessionId, 'meta.json'))).toBe(false)
+      expect(existsSync(sessionPath(dir, sessionId, 'output.log'))).toBe(false)
+      expect(existsSync(sessionPath(dir, sessionId, 'checkpoint.json'))).toBe(false)
+      expect(mgr.hasWriter(sessionId)).toBe(false)
+    })
+
+    it('records a normal session in the same manager (control)', async () => {
+      await mgr.openSession('normal-1', { cwd: '/tmp', cols: 80, rows: 24 })
+      await mgr.checkpoint('normal-1', makeSnapshot({ snapshotAnsi: 'recorded\r\n' }))
+
+      expect(existsSync(sessionPath(dir, 'normal-1', 'meta.json'))).toBe(true)
+      expect(existsSync(sessionPath(dir, 'normal-1', 'checkpoint.json'))).toBe(true)
+      expect(mgr.hasWriter('normal-1')).toBe(true)
+    })
+
+    it('keeps registerWriter and reopenSession no-ops for an incognito session (warm reattach / wake)', async () => {
+      const sessionId = 'incognito-reattach'
+      await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24, incognito: true })
+
+      mgr.registerWriter(sessionId)
+      mgr.reopenSession(sessionId)
+
+      expect(mgr.hasWriter(sessionId)).toBe(false)
+      expect(existsSync(join(dir, getHistorySessionDirName(sessionId)))).toBe(false)
+    })
+
+    it('stays incognito across a restart: a fresh manager on the same dir records nothing on re-adopt', async () => {
+      const sessionId = 'incognito-persist'
+      await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24, incognito: true })
+
+      // A daemon/app restart: a brand-new HistoryManager over the same base dir re-adopts the session
+      // (openSession/registerWriter WITHOUT the incognito flag). It must still write nothing.
+      const relaunched = new HistoryManager(dir)
+      await relaunched.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
+      relaunched.registerWriter(sessionId)
+      await relaunched.checkpoint(sessionId, makeSnapshot({ snapshotAnsi: 'post-restart\r\n' }))
+
+      expect(existsSync(join(dir, getHistorySessionDirName(sessionId)))).toBe(false)
+      expect(relaunched.hasWriter(sessionId)).toBe(false)
+      await relaunched.dispose()
+    })
+  })
+
   describe('checkpoint', () => {
     it('writes checkpoint.json with snapshot data', async () => {
       await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
