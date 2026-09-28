@@ -5,7 +5,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
-import { SettingsBadge, SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsBadge, SettingsSegmentedControl, SettingsSwitchRow } from './SettingsFormControls'
 import type { AgentSessionSourceHomeControl } from './codex-session-source-home-control'
 import { AgentSessionSourceHomeInput } from './codex-session-source-home-control'
 import { stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
@@ -65,11 +65,13 @@ export type AgentCatalogRowProps = {
   isDetected: boolean
   isEnabled: boolean
   isDefault: boolean
+  isIncognito: boolean
   cmdOverride: string | undefined
   argsOverride: string
   envOverride: Record<string, string>
   onSetDefault: () => void
   onSetEnabled: (enabled: boolean) => void
+  onSetIncognito: (incognito: boolean) => void
   onSaveOverride: (value: string) => void
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
@@ -86,11 +88,13 @@ export function AgentCatalogRow({
   isDetected,
   isEnabled,
   isDefault,
+  isIncognito,
   cmdOverride,
   argsOverride,
   envOverride,
   onSetDefault,
   onSetEnabled,
+  onSetIncognito,
   onSaveOverride,
   onSaveArgs,
   onSaveEnv,
@@ -99,7 +103,10 @@ export function AgentCatalogRow({
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
   const [cmdOpen, setCmdOpen] = useState(
-    Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
+    Boolean(cmdOverride) ||
+      argsOverride !== defaultArgs ||
+      envSummary !== defaultEnvSummary ||
+      isIncognito
   )
 
   return (
@@ -236,6 +243,25 @@ export function AgentCatalogRow({
               />
             </div>
           )}
+          <div className="mt-2">
+            <SettingsSwitchRow
+              label={translate(
+                'auto.components.settings.AgentsPane.incognitoByDefault',
+                'Incognito by default'
+              )}
+              description={translate(
+                'auto.components.settings.AgentsPane.incognitoByDefaultDescription',
+                "Don't record this agent's terminal scrollback to disk (no-session). A per-terminal --no-session flag still overrides this."
+              )}
+              checked={isIncognito}
+              onChange={() => onSetIncognito(!isIncognito)}
+              ariaLabel={translate(
+                'auto.components.settings.AgentsPane.incognitoByDefaultAria',
+                '{{value0}} incognito by default',
+                { value0: label }
+              )}
+            />
+          </div>
           <p className="mt-2 text-[11px] text-muted-foreground">
             {translate(
               'auto.components.settings.AgentsPane.f9f127d664',

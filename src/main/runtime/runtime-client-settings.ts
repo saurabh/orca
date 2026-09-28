@@ -23,6 +23,7 @@ export type RuntimeClientSettings = Pick<
   GlobalSettings,
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'
+  | 'terminalIncognitoAgents'
   | 'agentCmdOverrides'
   | 'agentDefaultArgs'
   | 'agentDefaultEnv'
@@ -61,6 +62,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'agentStatusHooksEnabled'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'
+  | 'terminalIncognitoAgents'
   | 'agentDefaultArgs'
   | 'agentDefaultEnv'
   | 'defaultTaskSource'
@@ -96,6 +98,7 @@ export class RuntimeClientSettingsController {
     return {
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
+      terminalIncognitoAgents: settings.terminalIncognitoAgents ?? [],
       agentCmdOverrides: settings.agentCmdOverrides ?? {},
       agentDefaultArgs: settings.agentDefaultArgs ?? {},
       agentDefaultEnv: settings.agentDefaultEnv ?? {},

@@ -70,7 +70,7 @@ export function pickTuiAgent(
   return null
 }
 
-export function normalizeDisabledTuiAgents(value: unknown): TuiAgent[] {
+function normalizeTuiAgentList(value: unknown): TuiAgent[] {
   if (!Array.isArray(value)) {
     return []
   }
@@ -81,6 +81,15 @@ export function normalizeDisabledTuiAgents(value: unknown): TuiAgent[] {
     }
   }
   return [...seen]
+}
+
+export function normalizeDisabledTuiAgents(value: unknown): TuiAgent[] {
+  return normalizeTuiAgentList(value)
+}
+
+/** Cleans the persisted incognito-agent list the same way disabled agents are normalized. */
+export function normalizeTerminalIncognitoAgents(value: unknown): TuiAgent[] {
+  return normalizeTuiAgentList(value)
 }
 
 export function haveSameDisabledTuiAgents(left: unknown, right: unknown): boolean {

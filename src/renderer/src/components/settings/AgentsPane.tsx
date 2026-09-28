@@ -21,7 +21,8 @@ import {
 } from './SettingsFormControls'
 import {
   isTuiAgentEnabled,
-  normalizeDisabledTuiAgents
+  normalizeDisabledTuiAgents,
+  normalizeTerminalIncognitoAgents
 } from '../../../../shared/tui-agent-selection'
 import {
   getTuiAgentDefaultArgs,
@@ -43,6 +44,10 @@ import {
   buildAgentAvailabilitySettingsUpdate,
   createAgentAvailabilityUpdateQueue
 } from './agent-availability-settings'
+import {
+  buildAgentIncognitoSettingsUpdate,
+  createAgentIncognitoUpdateQueue
+} from './agent-incognito-settings'
 import { AgentAvailabilityControl, type AgentCatalogRowProps } from './AgentCatalogRow'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
 import { AgentDetectionCatalog } from './AgentDetectionCatalog'
@@ -50,6 +55,8 @@ import { AgentDetectionCatalog } from './AgentDetectionCatalog'
 export {
   buildAgentAvailabilitySettingsUpdate,
   createAgentAvailabilityUpdateQueue,
+  buildAgentIncognitoSettingsUpdate,
+  createAgentIncognitoUpdateQueue,
   getAgentsPaneSearchEntries,
   AgentAvailabilityControl
 }
@@ -64,6 +71,7 @@ type AgentsPaneProps = {
 }
 
 const enqueueAgentAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
+const enqueueAgentIncognitoUpdate = createAgentIncognitoUpdateQueue()
 
 export function AgentPermissionsSetting({
   mode,
@@ -178,6 +186,7 @@ export function AgentsPane({
   const agentDefaultArgs = settings.agentDefaultArgs ?? {}
   const agentDefaultEnv = settings.agentDefaultEnv ?? {}
   const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+  const incognitoAgents = normalizeTerminalIncognitoAgents(settings.terminalIncognitoAgents)
   const detectedAgents =
     detectedIds === null ? [] : catalog.filter((agent) => detectedIds.has(agent.id))
   const enabledDetectedAgents = detectedAgents.filter((agent) =>
@@ -196,6 +205,15 @@ export function AgentsPane({
       enabled
     })
   }
+  const setAgentIncognito = (id: TuiAgent, incognito: boolean): void => {
+    void enqueueAgentIncognitoUpdate({
+      getSettings: () => useAppStore.getState().settings,
+      fallbackSettings: settings,
+      updateSettings,
+      agentId: id,
+      incognito
+    })
+  }
   const getRowProps = (
     agent: (typeof catalog)[number],
     isDetected: boolean
@@ -209,11 +227,13 @@ export function AgentsPane({
     isDetected,
     isEnabled: isTuiAgentEnabled(agent.id, disabledAgents),
     isDefault: isDetected && defaultAgent === agent.id,
+    isIncognito: incognitoAgents.includes(agent.id),
     cmdOverride: isDetected ? cmdOverrides[agent.id] : undefined,
     argsOverride: resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs),
     envOverride: resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv),
     onSetDefault: isDetected ? () => updateSettings({ defaultTuiAgent: agent.id }) : () => {},
     onSetEnabled: (enabled) => setAgentEnabled(agent.id, enabled),
+    onSetIncognito: (incognito) => setAgentIncognito(agent.id, incognito),
     onSaveOverride: isDetected
       ? (value) => {
           const next = { ...cmdOverrides }

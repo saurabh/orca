@@ -20,7 +20,8 @@ import {
   AgentsPane,
   getAgentsPaneSearchEntries,
   buildAgentAvailabilitySettingsUpdate,
-  createAgentAvailabilityUpdateQueue
+  createAgentAvailabilityUpdateQueue,
+  buildAgentIncognitoSettingsUpdate
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
 import { TooltipProvider } from '../ui/tooltip'
@@ -484,6 +485,29 @@ describe('AgentsPane', () => {
 
     props.onChange('disabled')
     expect(onSetEnabled).toHaveBeenCalledWith(false)
+  })
+
+  it('renders a per-agent incognito toggle when the agent is incognito by default', () => {
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      terminalIncognitoAgents: ['claude']
+    })
+
+    expect(markup).toContain('aria-label="Claude incognito by default"')
+    expect(markup).toContain('Incognito by default')
+  })
+
+  it('adds and removes agents from the incognito list on toggle', () => {
+    expect(
+      buildAgentIncognitoSettingsUpdate({ terminalIncognitoAgents: [] }, 'claude', true)
+    ).toEqual({
+      terminalIncognitoAgents: ['claude']
+    })
+    expect(
+      buildAgentIncognitoSettingsUpdate({ terminalIncognitoAgents: ['claude'] }, 'claude', false)
+    ).toEqual({
+      terminalIncognitoAgents: []
+    })
   })
 
   it('clears the default agent when disabling that agent', () => {

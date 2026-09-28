@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, Minimize2, Pin } from 'lucide-react'
+import { X, Minimize2, Pin, EyeOff } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
 import { useTabAgent } from '@/lib/use-tab-agent'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
@@ -238,6 +238,29 @@ export default function SortableTab({
       />
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
+      )}
+      {tab.incognito && !isEditing && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              data-testid="tab-incognito-indicator"
+              role="img"
+              aria-label={translate(
+                'auto.components.tab.bar.SortableTab.incognitoIndicator',
+                'Incognito'
+              )}
+              className="mr-1 inline-flex shrink-0 items-center text-muted-foreground"
+            >
+              <EyeOff className="size-3" aria-hidden />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {translate(
+              'auto.components.tab.bar.SortableTab.incognitoIndicatorTooltip',
+              'Incognito — no-session, scrollback not recorded'
+            )}
+          </TooltipContent>
+        </Tooltip>
       )}
       {isEditing ? (
         <Input
