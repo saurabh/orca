@@ -23,26 +23,33 @@ describe('resolveTerminalIncognito', () => {
     ).toBe(false)
   })
 
-  it('applies the per-agent default when the flag is unspecified', () => {
+  it('applies the per-agent default for an incognito-capable agent', () => {
     expect(
-      resolveTerminalIncognito({ launchAgent: 'claude' }, { launchAgent: 'claude' }, () =>
-        settings(['claude'])
-      )
+      resolveTerminalIncognito({ launchAgent: 'pi' }, { launchAgent: 'pi' }, () => settings(['pi']))
     ).toBe(true)
   })
 
   it('matches the resolved launch agent even when only startupAgent was requested', () => {
     expect(
-      resolveTerminalIncognito({ startupAgent: 'codex' }, { launchAgent: 'codex' }, () =>
-        settings(['codex'])
+      resolveTerminalIncognito({ startupAgent: 'pi' }, { launchAgent: 'pi' }, () =>
+        settings(['pi'])
       )
     ).toBe(true)
   })
 
-  it('is false for an agent not in the default list', () => {
+  it('ignores the per-agent default for a non-incognito-capable agent', () => {
+    // claude cannot be made ephemeral interactively, so a stale default must not take effect.
     expect(
-      resolveTerminalIncognito({ launchAgent: 'codex' }, { launchAgent: 'codex' }, () =>
+      resolveTerminalIncognito({ launchAgent: 'claude' }, { launchAgent: 'claude' }, () =>
         settings(['claude'])
+      )
+    ).toBe(false)
+  })
+
+  it('is false for a capable agent not in the default list', () => {
+    expect(
+      resolveTerminalIncognito({ launchAgent: 'pi' }, { launchAgent: 'pi' }, () =>
+        settings(['omp'])
       )
     ).toBe(false)
   })
@@ -53,7 +60,11 @@ describe('resolveTerminalIncognito', () => {
 
   it('is false when settings are unavailable', () => {
     expect(
-      resolveTerminalIncognito({ launchAgent: 'claude' }, { launchAgent: 'claude' }, () => undefined)
+      resolveTerminalIncognito(
+        { launchAgent: 'claude' },
+        { launchAgent: 'claude' },
+        () => undefined
+      )
     ).toBe(false)
   })
 })

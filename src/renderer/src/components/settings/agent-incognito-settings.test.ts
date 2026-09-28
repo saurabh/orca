@@ -7,35 +7,32 @@ import {
 } from './agent-incognito-settings'
 
 describe('agent incognito settings', () => {
-  it('adds an agent to the incognito list, normalizing duplicates and unknown ids', () => {
+  it('adds a capable agent and drops non-capable/unknown ids while normalizing', () => {
+    // Only incognito-capable agents survive: a stale 'claude' cannot persist as incognito.
     expect(
       buildAgentIncognitoSettingsUpdate(
-        { terminalIncognitoAgents: ['claude', 'claude', 'unknown-agent'] as never[] },
-        'codex',
+        { terminalIncognitoAgents: ['omp', 'omp', 'claude', 'unknown-agent'] as never[] },
+        'pi',
         true
       )
     ).toEqual({
-      terminalIncognitoAgents: ['claude', 'codex']
+      terminalIncognitoAgents: ['omp', 'pi']
     })
   })
 
   it('removes an agent from the incognito list when toggled off', () => {
     expect(
-      buildAgentIncognitoSettingsUpdate(
-        { terminalIncognitoAgents: ['claude', 'codex'] },
-        'claude',
-        false
-      )
+      buildAgentIncognitoSettingsUpdate({ terminalIncognitoAgents: ['pi', 'omp'] }, 'pi', false)
     ).toEqual({
-      terminalIncognitoAgents: ['codex']
+      terminalIncognitoAgents: ['omp']
     })
   })
 
   it('is idempotent when enabling an already-incognito agent', () => {
     expect(
-      buildAgentIncognitoSettingsUpdate({ terminalIncognitoAgents: ['claude'] }, 'claude', true)
+      buildAgentIncognitoSettingsUpdate({ terminalIncognitoAgents: ['pi'] }, 'pi', true)
     ).toEqual({
-      terminalIncognitoAgents: ['claude']
+      terminalIncognitoAgents: ['pi']
     })
   })
 
@@ -58,7 +55,7 @@ describe('agent incognito settings', () => {
         getSettings: () => latest,
         fallbackSettings: settings,
         updateSettings,
-        agentId: 'claude',
+        agentId: 'pi',
         incognito: true
       })
     ).rejects.toThrow('write failed')
@@ -66,11 +63,11 @@ describe('agent incognito settings', () => {
       getSettings: () => latest,
       fallbackSettings: settings,
       updateSettings,
-      agentId: 'codex',
+      agentId: 'omp',
       incognito: true
     })
 
     expect(updateSettings).toHaveBeenCalledTimes(2)
-    expect(updateSettings.mock.calls[1][0]).toMatchObject({ terminalIncognitoAgents: ['codex'] })
+    expect(updateSettings.mock.calls[1][0]).toMatchObject({ terminalIncognitoAgents: ['omp'] })
   })
 })

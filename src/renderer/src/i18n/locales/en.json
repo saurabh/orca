@@ -6791,7 +6791,7 @@
           "storedDefaultUndetected": "Saved as your default, but not detected right now",
           "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
           "incognitoByDefault": "Incognito by default",
-          "incognitoByDefaultDescription": "Don't record this agent's terminal scrollback to disk (no-session). A per-terminal --no-session flag still overrides this.",
+          "incognitoByDefaultDescription": "Launch this agent ephemerally (no-session): the harness records no session and Orca records no scrollback. A per-terminal --no-session flag still overrides this.",
           "incognitoByDefaultAria": "{{value0}} incognito by default"
         },
         "AppIconSelector": {

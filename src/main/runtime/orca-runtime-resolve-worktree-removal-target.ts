@@ -21,6 +21,7 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtim
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { resolveTerminalIncognito } from './runtime-terminal-incognito'
 
 export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected async resolveWorktreeRemovalTarget(
@@ -214,12 +215,20 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       return opts
     }
 
+    // Why: incognito-capable agents get their native ephemeral flag on argv when this terminal is
+    // incognito, so the harness itself stops recording — not just Orca's scrollback.
+    const incognito = resolveTerminalIncognito(
+      opts,
+      { launchAgent: agent, ...(opts.startupAgent ? { startupAgent: opts.startupAgent } : {}) },
+      () => settings
+    )
     const startupPlan = buildAgentStartupPlan({
       ...resolveAgentStartupPlanInputs({
         agent,
         settings,
         platform,
         isRemote,
+        incognito,
         ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
         // A requested shell is the one this PTY will actually be, so it owns the quoting family.
         windowsShellOverride: opts.shellOverride,

@@ -1,5 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import { isTuiAgent } from './tui-agent-config'
+import { isIncognitoCapable } from './tui-agent-incognito'
 
 // Keep this order in sync with the desktop agent catalog. It defines the
 // automatic fallback priority when the user has not chosen a default agent.
@@ -87,9 +88,13 @@ export function normalizeDisabledTuiAgents(value: unknown): TuiAgent[] {
   return normalizeTuiAgentList(value)
 }
 
-/** Cleans the persisted incognito-agent list the same way disabled agents are normalized. */
+/**
+ * Cleans the persisted incognito-agent list and drops any agent that cannot actually be made
+ * ephemeral (see INCOGNITO_CAPABLE_AGENTS). This is the write/read gate: a stale non-capable agent
+ * (e.g. 'claude') can never persist as incognito, so the badge/flag never make a false promise.
+ */
 export function normalizeTerminalIncognitoAgents(value: unknown): TuiAgent[] {
-  return normalizeTuiAgentList(value)
+  return normalizeTuiAgentList(value).filter(isIncognitoCapable)
 }
 
 export function haveSameDisabledTuiAgents(left: unknown, right: unknown): boolean {

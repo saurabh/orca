@@ -1,4 +1,5 @@
 import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isIncognitoCapable } from '../../shared/tui-agent-incognito'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 
@@ -29,6 +30,11 @@ export function resolveTerminalIncognito(
   const agent =
     launchOpts.startupAgent ?? launchOpts.launchAgent ?? opts.startupAgent ?? opts.launchAgent
   if (agent === undefined || !isTuiAgent(agent)) {
+    return false
+  }
+  // Why: the per-agent default is only honest for agents that can be made ephemeral. A non-capable
+  // agent (e.g. claude) must never default to incognito even if a stale setting still lists it.
+  if (!isIncognitoCapable(agent)) {
     return false
   }
   return configured.includes(agent)

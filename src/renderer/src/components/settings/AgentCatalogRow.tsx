@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isIncognitoCapable } from '../../../../shared/tui-agent-incognito'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -243,25 +244,29 @@ export function AgentCatalogRow({
               />
             </div>
           )}
-          <div className="mt-2">
-            <SettingsSwitchRow
-              label={translate(
-                'auto.components.settings.AgentsPane.incognitoByDefault',
-                'Incognito by default'
-              )}
-              description={translate(
-                'auto.components.settings.AgentsPane.incognitoByDefaultDescription',
-                "Don't record this agent's terminal scrollback to disk (no-session). A per-terminal --no-session flag still overrides this."
-              )}
-              checked={isIncognito}
-              onChange={() => onSetIncognito(!isIncognito)}
-              ariaLabel={translate(
-                'auto.components.settings.AgentsPane.incognitoByDefaultAria',
-                '{{value0}} incognito by default',
-                { value0: label }
-              )}
-            />
-          </div>
+          {/* Why: only agents with a native ephemeral flag (INCOGNITO_CAPABLE_AGENTS) can honestly
+              be made incognito; showing the toggle for others would be a false privacy promise. */}
+          {isIncognitoCapable(agentId) && (
+            <div className="mt-2">
+              <SettingsSwitchRow
+                label={translate(
+                  'auto.components.settings.AgentsPane.incognitoByDefault',
+                  'Incognito by default'
+                )}
+                description={translate(
+                  'auto.components.settings.AgentsPane.incognitoByDefaultDescription',
+                  'Launch this agent ephemerally (no-session): the harness records no session and Orca records no scrollback. A per-terminal --no-session flag still overrides this.'
+                )}
+                checked={isIncognito}
+                onChange={() => onSetIncognito(!isIncognito)}
+                ariaLabel={translate(
+                  'auto.components.settings.AgentsPane.incognitoByDefaultAria',
+                  '{{value0}} incognito by default',
+                  { value0: label }
+                )}
+              />
+            </div>
+          )}
           <p className="mt-2 text-[11px] text-muted-foreground">
             {translate(
               'auto.components.settings.AgentsPane.f9f127d664',
