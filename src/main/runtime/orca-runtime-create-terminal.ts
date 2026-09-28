@@ -191,8 +191,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         if (result.agentSessionEnsure) {
           const canonicalSurface = result.agentSessionEnsure.owner.surface
           preAllocatedHandle = canonicalSurface.terminalHandle
-          tabId = canonicalSurface.tabId
-          leafId = canonicalSurface.leafId
+          ;({ tabId, leafId } = canonicalSurface)
           paneKey = dependencies.makePaneKey(tabId, leafId)
         } else if (result.stablePaneOwner) {
           preAllocatedHandle = result.stablePaneOwner.handle
@@ -221,8 +220,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
           pty.runtimeSessionOwned = true
-          // Why outside the adoption guard: incognito is a stable property of the session (it decides
-          // whether scrollback is recorded), independent of whether this create adopted a stable pane.
+          // Why outside the adoption guard: incognito is a stable per-session property.
           pty.incognito = incognito
           if (!adoptedStablePane) {
             if (launchOpts.title) {
@@ -270,6 +268,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
               activate: presentation === 'focused',
               ...(presentation ? { presentation } : {}),
               ...dependencies.ownerSurfacing(opts.surfaceOwner !== false),
+              ...(incognito ? { incognito: true } : {}),
               tabId,
               leafId
             })

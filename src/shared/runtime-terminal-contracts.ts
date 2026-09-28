@@ -262,14 +262,13 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   surfaceOwner?: false
   /** Windows shell the created tab spawns AS, instead of the host default. */
   shellOverride?: string
+  /** Host-authoritative incognito ("no-session") state; wins over the renderer's optimistic stamp. */
+  incognito?: boolean
 }
 
 export type RuntimeTerminalCreateRequestPayload =
   | (RuntimeTerminalCreateBaseRequestPayload & { source?: undefined })
-  | (RuntimeTerminalCreateBaseRequestPayload & {
-      worktreeId: string
-      source: 'runtime-session'
-    })
+  | (RuntimeTerminalCreateBaseRequestPayload & { worktreeId: string; source: 'runtime-session' })
 
 export type RuntimeTerminalCreate = {
   handle: string
