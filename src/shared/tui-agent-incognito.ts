@@ -19,8 +19,25 @@ export const INCOGNITO_CAPABLE_AGENTS: Partial<Record<TuiAgent, string>> = {
 }
 
 /** True when the agent can be launched as a genuinely ephemeral interactive terminal. */
-export function isIncognitoCapable(agent: TuiAgent | null | undefined): boolean {
+export function isIncognitoCapable(agent: TuiAgent | null | undefined): agent is TuiAgent {
   return agent != null && INCOGNITO_CAPABLE_AGENTS[agent] !== undefined
+}
+
+/**
+ * Whether a launch of `agent` should be incognito by the per-agent default: the agent is
+ * incognito-capable AND listed in Settings.terminalIncognitoAgents. This is the single rule every
+ * launch builder uses so `applyIncognitoLaunchFlag` fires on all of them (the flag itself is also
+ * capability-gated, so a stale non-capable entry can never add a flag the harness lacks).
+ */
+export function agentDefaultsToIncognito(
+  agent: TuiAgent | null | undefined,
+  terminalIncognitoAgents: readonly TuiAgent[] | null | undefined
+): boolean {
+  return (
+    isIncognitoCapable(agent) &&
+    Array.isArray(terminalIncognitoAgents) &&
+    terminalIncognitoAgents.includes(agent)
+  )
 }
 
 /** The native ephemeral flag for the agent, or undefined when it has none. */

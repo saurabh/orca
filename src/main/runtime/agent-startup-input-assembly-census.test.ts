@@ -25,6 +25,14 @@ const HAND_ASSEMBLY_MARKERS = [
   'resolveLocalWindowsAgentStartupShell('
 ]
 
+/**
+ * Proof that a launch site resolves the terminal's incognito state and threads it into the shared
+ * resolver (so `applyIncognitoLaunchFlag` fires and a capable incognito agent gets its native
+ * `--no-session`). B1 shipped because only one site did this; the others badged incognito while the
+ * harness kept writing its own session.
+ */
+const INCOGNITO_THREADING_MARKERS = ['agentDefaultsToIncognito(', 'resolveTerminalIncognito(']
+
 function read(file: string): string {
   return readFileSync(join(REPO_ROOT, file), 'utf8')
 }
@@ -43,6 +51,13 @@ describe('host agent-startup input assembly census', () => {
       return HAND_ASSEMBLY_MARKERS.some((marker) => source.includes(marker))
     })
     expect(handAssembled).toEqual([])
+  })
+
+  it('threads the incognito flag into the shared resolver at every migrated host launch site (B1)', () => {
+    const missing = MIGRATED_HOST_LAUNCH_MODULES.filter(
+      (file) => !INCOGNITO_THREADING_MARKERS.some((marker) => read(file).includes(marker))
+    )
+    expect(missing).toEqual([])
   })
 
   it('detects hand assembly when it is present', () => {

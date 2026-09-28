@@ -3481,7 +3481,8 @@
             "fdb2691425": "Collapse pane",
             "95db5f2f7d": "Close tab",
             "incognitoIndicator": "Incognito",
-            "incognitoIndicatorTooltip": "Incognito — no-session, scrollback not recorded"
+            "incognitoIndicatorTooltip": "Incognito — no-session: the agent and Orca record nothing",
+            "incognitoIndicatorTooltipOrcaOnly": "Incognito — Orca records no scrollback (this agent still keeps its own session)"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "Tab Color",

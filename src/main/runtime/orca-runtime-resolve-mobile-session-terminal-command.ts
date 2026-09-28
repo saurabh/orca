@@ -5,6 +5,7 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { agentDefaultsToIncognito } from '../../shared/tui-agent-incognito'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 
@@ -53,7 +54,10 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
         // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
         platform: this.getAgentLaunchPlatformForWorkspace(workspace),
         // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
-        isRemote: Boolean(workspace.connectionId)
+        isRemote: Boolean(workspace.connectionId),
+        // Why: the mobile builder builds its own plan, so it must add the native ephemeral flag for a
+        // capable incognito agent itself — resolveAgentTerminalCreateOptions never runs here.
+        incognito: agentDefaultsToIncognito(opts.agent, settings.terminalIncognitoAgents)
       }),
       prompt: opts.agentPrompt ?? '',
       allowEmptyPromptLaunch: true
