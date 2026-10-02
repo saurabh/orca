@@ -20,6 +20,7 @@ describe('CI background step barriers', () => {
   it('joins every background check without suppressing failures', () => {
     for (const job of [
       pr.jobs.static_analysis,
+      pr.jobs.typecheck,
       pr.jobs.mobile_web_app,
       pr.jobs.package,
       pr.jobs.shell_contracts,
@@ -45,6 +46,14 @@ describe('CI background step barriers', () => {
       }
       expect([...pending]).toEqual([])
     }
+  })
+
+  it('joins planning before publishing the unit artifact', () => {
+    assertJoinedBefore(
+      pr.jobs.typecheck.steps,
+      'unit-plan',
+      (step) => step.uses === 'actions/upload-artifact@v7'
+    )
   })
 
   it('finishes native import-cycle analysis before mobile installation changes resolution', () => {
@@ -107,7 +116,7 @@ describe('CI background step barriers', () => {
   it('joins package setup before reading outputs and preserves isolated native probes', () => {
     const steps = pr.jobs.package.steps
     // Parallel composites must not race to download their shared cache action on first use.
-    const cacheAction = steps.findIndex((step) => step.uses === 'actions/cache@v5')
+    const cacheAction = steps.findIndex((step) => step.uses === 'actions/cache/restore@v5')
     expect(cacheAction).toBeGreaterThanOrEqual(0)
     expect(cacheAction).toBeLessThan(
       steps.findIndex((step) => step.id === 'shutdown-fixture-cache')
