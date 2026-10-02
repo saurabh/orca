@@ -29,6 +29,13 @@ export async function createDesktopTerminal(
   const cwd = workspace
     ? runtime.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd)
     : launchOpts.cwd
+  // Why (B-foreground): the renderer-backed path never ran the background branch that resolves and
+  // threads incognito, so UI-launched incognito terminals (a Pi default-incognito chat) were
+  // recorded. Resolve it here the same way and send it so the renderer stamps the tab and the
+  // daemon spawn suppresses scrollback, sets ORCA_INCOGNITO, and launches with --no-session.
+  const incognito = dependencies.resolveTerminalIncognito(opts, launchOpts, () =>
+    runtime.store?.getSettings?.()
+  )
   const requestId = dependencies.randomUUID()
   const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -69,6 +76,7 @@ export async function createDesktopTerminal(
       ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
       ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
       ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
+      ...(incognito ? { incognito: true } : {}),
       startupCommandDelivery: launchOpts.startupCommandDelivery,
       ...(launchOpts.shellOverride ? { shellOverride: launchOpts.shellOverride } : {}),
       title: launchOpts.title,
