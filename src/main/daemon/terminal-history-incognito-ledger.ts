@@ -140,13 +140,22 @@ export class IncognitoSessionLedger {
       // Preserve a corrupt MAIN ledger before the first overwrite clobbers it: its ids may be
       // recoverable, and the renamed sibling is ALSO the durable distrust marker that keeps future
       // loads failing closed (see constructor). Only the main file this load found corrupt is renamed
-      // — never a valid-but-lossy ledger written after a prior corruption.
+      // — never a valid-but-lossy ledger written after a prior corruption. A durable marker MUST exist
+      // before we overwrite with the (lossy) in-memory set, or a later load would trust it; if we
+      // cannot guarantee one, throw so persist() reports failure and leaves the corrupt file in place.
       if (this.corruptMainPending) {
         this.corruptMainPending = false
+        const marker = join(dirname(this.path), `${PRESERVED_PREFIX}${Date.now()}`)
         try {
-          renameSync(this.path, join(dirname(this.path), `${PRESERVED_PREFIX}${Date.now()}`))
+          renameSync(this.path, marker)
         } catch {
-          // Already gone / un-renamable; nothing to preserve.
+          // The corrupt file could not be moved aside (un-renamable, or already gone). Still leave a
+          // durable distrust marker so the lossy ledger we write below is not trusted after a restart.
+          // If even this throws, it propagates to the outer catch → persist() returns false without
+          // overwriting, and the corrupt file (if still present) remains as the marker.
+          if (!this.hasPreservedSibling()) {
+            writeFileSync(marker, '', { mode: 0o600 })
+          }
         }
       }
       // Why tmp+rename: a torn write must not corrupt the ledger; a stale-but-whole one is recoverable.

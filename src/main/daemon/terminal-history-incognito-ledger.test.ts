@@ -102,6 +102,26 @@ describe('IncognitoSessionLedger', () => {
     expect(recovered.suppressesCapture('some-readopt')).toBe(false)
   })
 
+  it('still leaves a durable marker when the preservation rename fails (corrupt file vanished)', () => {
+    // If the corrupt file cannot be moved aside — here it is deleted before persist(), so the rename
+    // hits ENOENT — persist() must NOT overwrite with a lossy ledger that a later load would trust.
+    // It writes an empty distrust marker instead, so distrust survives the restart.
+    const ledgerPath = join(dir, LEDGER_FILE)
+    writeFileSync(ledgerPath, 'corrupt')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const ledger = new IncognitoSessionLedger(dir)
+    expect(ledger.isUntrusted()).toBe(true)
+
+    rmSync(ledgerPath) // the corrupt file vanishes before the preserve-rename runs
+    expect(ledger.mark('sess-x')).toBe(true)
+
+    const markers = readdirSync(dir).filter((n) => n.startsWith(`${LEDGER_FILE}.unreadable-`))
+    expect(markers).toHaveLength(1)
+    // The restart sees the marker and stays untrusted, even though the main ledger now parses.
+    const afterRestart = new IncognitoSessionLedger(dir)
+    expect(afterRestart.isUntrusted()).toBe(true)
+  })
+
   it('fails LOUD and preserves the file when an existing ledger is unreadable', () => {
     // A ledger that EXISTS but cannot be parsed hides WHICH sessions must stay unrecorded. Starting
     // empty+silent would let a restart re-adopt them as normal terminals and record them — fail-open.
