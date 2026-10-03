@@ -66,13 +66,13 @@ export class HistoryManager {
   async openSession(sessionId: string, opts: OpenSessionOptions): Promise<void> {
     // Why: an incognito terminal never touches disk — mark it, then stop before
     // ensurePrivateDir/meta.json/writer creation (releasing any freeze) so no session tree appears.
-    if (opts.incognito || this.incognito.has(sessionId)) {
-      // Why surface a failed mark: the ledger is the only durable restart-suppression this
-      // incognito session has. If it could not be written, a later daemon can re-adopt this id
-      // without the flag and start recording — so route the failure through handleWriteError, which
-      // disables the session for this process and notifies the daemon, rather than silently pretend
-      // durability held. No writer or session dir is created either way.
-      if (!this.incognito.mark(sessionId)) {
+    // Suppress capture for a genuinely-incognito session (explicit flag or ledger id) AND, when the
+    // ledger is untrusted, for any re-adopt not explicitly created non-incognito — fail CLOSED since it
+    // may be one of the lost ids. Mark ONLY a genuine one (an untrusted-only re-adopt is suppressed for
+    // this process without marking, so a possibly-normal session is not penalised forever); surface a
+    // failed mark (the ledger is the only restart-suppression). No writer or session dir either way.
+    if (this.incognito.suppressesCapture(sessionId, opts.incognito)) {
+      if ((opts.incognito || this.incognito.has(sessionId)) && !this.incognito.mark(sessionId)) {
         this.handleWriteError(sessionId, new Error('incognito_ledger_persist_failed'))
       }
       this.abandonRecoveryFreeze(opts.recoveryFreeze)
@@ -156,8 +156,9 @@ export class HistoryManager {
 
   // Why: warm reattach has no in-memory writers; re-register without touching meta.json or checkpoint.json (only recovery data until the next tick).
   registerWriter(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): void {
-    if (this.incognito.has(sessionId)) {
-      // Warm reattach of an incognito session must not begin recording it either.
+    if (this.incognito.suppressesCapture(sessionId)) {
+      // Warm reattach of an incognito session must not begin recording it either; and while the
+      // ledger is untrusted this re-adopt fails CLOSED, since it may be one of the lost incognito ids.
       this.abandonRecoveryFreeze(recoveryFreeze)
       return
     }

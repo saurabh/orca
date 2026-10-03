@@ -34,6 +34,39 @@ describe('IncognitoSessionLedger', () => {
     expect(errorSpy).not.toHaveBeenCalled()
   })
 
+  it('treats a valid-JSON-but-not-an-array ledger as untrusted (not a benign empty start)', () => {
+    // A torn/wrong-shaped write can parse as JSON yet carry no id array (e.g. `{}`); the old
+    // Array.isArray check skipped it silently. It must be treated as untrusted, same as a parse error.
+    writeFileSync(join(dir, LEDGER_FILE), '{"not":"an array"}')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const ledger = new IncognitoSessionLedger(dir)
+
+    expect(ledger.isUntrusted()).toBe(true)
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails closed on a re-adopt while untrusted, but lets an explicitly non-incognito session record', () => {
+    writeFileSync(join(dir, LEDGER_FILE), 'not json')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const ledger = new IncognitoSessionLedger(dir)
+
+    expect(ledger.isUntrusted()).toBe(true)
+    // Re-adopt (no explicit flag) → suppress (could be a lost incognito id).
+    expect(ledger.suppressesCapture('readopted-unknown')).toBe(true)
+    // Explicitly incognito → suppress. Explicitly NON-incognito (a fresh new session) → record.
+    expect(ledger.suppressesCapture('x', true)).toBe(true)
+    expect(ledger.suppressesCapture('fresh-normal', false)).toBe(false)
+  })
+
+  it('does not suppress an unknown re-adopt when the ledger is trusted', () => {
+    const ledger = new IncognitoSessionLedger(dir) // absent file → trusted + empty
+    expect(ledger.isUntrusted()).toBe(false)
+    expect(ledger.suppressesCapture('some-normal-session')).toBe(false)
+    ledger.mark('priv')
+    expect(ledger.suppressesCapture('priv')).toBe(true)
+  })
+
   it('fails LOUD and preserves the file when an existing ledger is unreadable', () => {
     // A ledger that EXISTS but cannot be parsed hides WHICH sessions must stay unrecorded. Starting
     // empty+silent would let a restart re-adopt them as normal terminals and record them — fail-open.

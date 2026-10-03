@@ -237,7 +237,9 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         cwd: effectiveCwd ?? '',
         cols: effectiveCols,
         rows: effectiveRows,
-        ...(opts.incognito ? { incognito: true } : {}),
+        // Explicit boolean (not just when true): a brand-new NON-incognito session must keep
+        // recording even while the ledger is untrusted — only unknown re-adopts fail closed.
+        incognito: opts.incognito === true,
         ...(recoveryFreeze ? { recoveryFreeze } : {}),
         ...(historyRecovery.unreadableSessionId === sessionId
           ? { quarantineUnreadableRecovery: true }

@@ -304,6 +304,36 @@ describe('HistoryManager', () => {
       }
     })
 
+    it('fails CLOSED on re-adopt when the ledger is untrusted, but still records a fresh normal session', async () => {
+      // Corrupt ledger → its do-not-record ids are lost. A re-adopt (no explicit flag) might be one of
+      // them, so it must NOT be recorded; a brand-new, explicitly non-incognito session still records.
+      const failDir = createTestDir()
+      writeFileSync(join(failDir, '.incognito-sessions.json'), '{ corrupt')
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const mgrUntrusted = new HistoryManager(failDir)
+      try {
+        // Re-adopt path: openSession with no incognito flag, and warm-reattach registerWriter.
+        await mgrUntrusted.openSession('readopt-unknown', { cwd: '/tmp', cols: 80, rows: 24 })
+        mgrUntrusted.registerWriter('reattach-unknown')
+        expect(mgrUntrusted.hasWriter('readopt-unknown')).toBe(false)
+        expect(mgrUntrusted.hasWriter('reattach-unknown')).toBe(false)
+        expect(existsSync(join(failDir, getHistorySessionDirName('readopt-unknown')))).toBe(false)
+
+        // A brand-new session explicitly created non-incognito is known provenance → records normally.
+        await mgrUntrusted.openSession('fresh-normal', {
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          incognito: false
+        })
+        expect(mgrUntrusted.hasWriter('fresh-normal')).toBe(true)
+      } finally {
+        errorSpy.mockRestore()
+        await mgrUntrusted.dispose()
+        rmSync(failDir, { recursive: true, force: true })
+      }
+    })
+
     it('stays incognito across a restart: a fresh manager on the same dir records nothing on re-adopt', async () => {
       const sessionId = 'incognito-persist'
       await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24, incognito: true })

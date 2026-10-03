@@ -19,40 +19,62 @@ export class IncognitoSessionLedger {
   /** Subset of `ids` proven to be on disk, so a transient persist failure is retried, not forgotten. */
   private readonly persisted = new Set<string>()
   private readonly path: string
-  /** True when a ledger file EXISTED at startup but could not be read/parsed — a fail-OPEN risk. */
-  private loadFailed = false
+  /** A ledger file EXISTED but could not supply a valid id list, so `has()` is no longer authoritative
+   *  (the do-not-record ids are lost). Stays true for this process's life so re-adopts fail closed. */
+  private untrusted = false
+  /** The one-time preserve-rename of an untrusted file has run (so persist() does not rename repeatedly). */
+  private preservedCorrupt = false
 
   constructor(basePath: string) {
     this.path = join(basePath, LEDGER_FILE)
-    const existed = existsSync(this.path)
+    if (!existsSync(this.path)) {
+      return // ABSENT file = genuine first run; stay empty and silent.
+    }
     try {
-      if (existed) {
-        const parsed = JSON.parse(readFileSync(this.path, 'utf8'))
-        if (Array.isArray(parsed)) {
-          for (const id of parsed) {
-            if (typeof id === 'string') {
-              this.ids.add(id)
-              // Loaded from disk → already durable; do not re-persist these on the next mark().
-              this.persisted.add(id)
-            }
-          }
+      const parsed = JSON.parse(readFileSync(this.path, 'utf8'))
+      if (!Array.isArray(parsed)) {
+        throw new Error('ledger is not a JSON array of ids')
+      }
+      for (const id of parsed) {
+        if (typeof id === 'string') {
+          this.ids.add(id)
+          // Loaded from disk → already durable; do not re-persist these on the next mark().
+          this.persisted.add(id)
         }
       }
     } catch {
-      // A ledger that EXISTS but cannot be read is a privacy hazard, not a benign empty start:
-      // its ids (the sessions to keep NOT recording) are now unknown, so a restart would re-adopt
-      // them as normal terminals and begin recording. Fail LOUD, and preserve the unreadable file
-      // (see persist()) so it is not silently clobbered and can be recovered. An ABSENT file is the
-      // genuine first-run case and stays silent.
-      this.loadFailed = true
+      // A ledger that EXISTS but is unreadable OR not a valid id array is a privacy hazard, not a
+      // benign empty start: the ids of the sessions to keep NOT recording are now unknown, so a
+      // re-adopted terminal would be treated as normal and recorded. Mark the ledger untrusted so
+      // every re-adopt fails CLOSED (see HistoryManager), fail LOUD, and preserve the file
+      // (see persist()) so it is not clobbered and can be recovered.
+      this.untrusted = true
       console.error(
-        `[history] incognito ledger at ${this.path} exists but is unreadable — previously-private sessions may start recording after a restart`
+        `[history] incognito ledger at ${this.path} exists but is unreadable/invalid — its private-session ids are lost; re-adopted terminals will NOT be recorded until a clean restart`
       )
     }
   }
 
   has(sessionId: string): boolean {
     return this.ids.has(sessionId)
+  }
+
+  /** The on-disk ledger existed but could not supply trustworthy ids. While true, callers must fail
+   *  CLOSED: treat a re-adopted session (no explicit non-incognito flag) as do-not-record, because it
+   *  may be one of the lost incognito ids. A fresh, explicitly non-incognito session is unaffected. */
+  isUntrusted(): boolean {
+    return this.untrusted
+  }
+
+  /**
+   * Whether a terminal's scrollback must NOT be captured: it is genuinely incognito (explicit flag or
+   * a ledger id), OR the ledger is untrusted and this is not an explicitly non-incognito session (a
+   * re-adopt whose provenance we can no longer prove — fail closed). `explicit` is the caller's
+   * incognito flag, `undefined` on a re-adopt. This decides suppression only; the caller marks a
+   * genuine incognito id durably (an untrusted-only re-adopt is suppressed without being marked).
+   */
+  suppressesCapture(sessionId: string, explicit?: boolean): boolean {
+    return explicit === true || this.has(sessionId) || (explicit !== false && this.untrusted)
   }
 
   /**
@@ -84,15 +106,17 @@ export class IncognitoSessionLedger {
   private persist(): boolean {
     try {
       mkdirSync(dirname(this.path), { recursive: true })
-      // Preserve a ledger we failed to read before the first overwrite clobbers it: its ids may be
+      // Preserve an untrusted ledger before the first overwrite clobbers it: its ids may be
       // recoverable, and destroying the only copy would turn a readable-later file into a lost one.
-      if (this.loadFailed) {
+      // `untrusted` itself stays set (re-adopts keep failing closed until a clean restart); this only
+      // guards the rename so it runs once.
+      if (this.untrusted && !this.preservedCorrupt) {
+        this.preservedCorrupt = true
         try {
           renameSync(this.path, `${this.path}.unreadable-${Date.now()}`)
         } catch {
           // Already gone / un-renamable; nothing to preserve.
         }
-        this.loadFailed = false
       }
       // Why tmp+rename: a torn write must not corrupt the ledger; a stale-but-whole one is recoverable.
       const tmp = `${this.path}.tmp`
