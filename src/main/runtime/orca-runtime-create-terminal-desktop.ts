@@ -78,7 +78,10 @@ export async function createDesktopTerminal(
       ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
       ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
       ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-      ...(incognito ? { incognito: true } : {}),
+      // Why send the resolved boolean (including false): the host is authoritative over incognito, so
+      // an explicit `--no-session false` that overrides a per-agent default must reach the renderer as
+      // false rather than being dropped and silently recomputed back to the default (incognito).
+      incognito,
       startupCommandDelivery: launchOpts.startupCommandDelivery,
       ...(launchOpts.shellOverride ? { shellOverride: launchOpts.shellOverride } : {}),
       title: launchOpts.title,
@@ -93,6 +96,9 @@ export async function createDesktopTerminal(
     tabId: reply.tabId,
     worktreeId: worktreeId ?? '',
     title: reply.title,
+    // Why: match the background create path's result (orca-runtime-create-terminal.ts) so the CLI
+    // `terminal create` reports a UI-launched incognito terminal as incognito too.
+    ...(incognito ? { incognito: true } : {}),
     ...runtime.getPtyExecutionHostMetadata(runtime.handles.get(handle)?.ptyId ?? null),
     surface: 'visible'
   }

@@ -97,4 +97,21 @@ describe('terminal-request bridge incognito sync', () => {
     const options = mocks.createTab.mock.calls[0][3]
     expect(options?.incognito).toBeUndefined()
   })
+
+  it('forwards an explicit host false so it overrides createTab’s per-agent default', () => {
+    const handler = captureHandler()
+
+    // The host resolved an explicit opt-out (`--no-session false` over a per-agent default). It must
+    // reach createTab as `false`, not be dropped — otherwise createTab recomputes the default (true)
+    // and wrongly stamps the tab incognito.
+    handler({
+      requestId: 'req-3',
+      worktreeId: 'repo::/wt',
+      presentation: 'background',
+      incognito: false
+    } as RuntimeTerminalCreateRequestPayload)
+
+    const options = mocks.createTab.mock.calls[0][3]
+    expect(options).toMatchObject({ incognito: false })
+  })
 })
