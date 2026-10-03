@@ -121,6 +121,7 @@ import {
 } from '../shared/agent-session-host-authority'
 import { readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
 import { chargedPtyRetainedStringBytes } from '../shared/pty-retained-string-memory'
+import { INCOGNITO_HISTORY_WSLENV_KEYS } from '../shared/incognito-history-env'
 import {
   applyRelayIncognitoEnv,
   deleteRelayFishHistory,
@@ -2003,8 +2004,9 @@ export class PtyHandler {
       // and mint NO scoped history file, mirroring the daemon's withHistoryIsolation incognito branch.
       applyRelayIncognitoEnv(spawnEnv)
       if (wslShell) {
-        // Carry HISTFILE=/dev/null into the guest; otherwise incognito would be a false promise under WSL.
-        addWslEnvKeys(spawnEnv, ['HISTFILE'])
+        // Carry every incognito history knob into the guest (HISTFILE, ORCA_HISTFILE for macOS-zsh
+        // guests, fish_private_mode, ...); otherwise incognito would be a false promise under WSL.
+        addWslEnvKeys(spawnEnv, [...INCOGNITO_HISTORY_WSLENV_KEYS])
       }
     } else {
       // Deliberately not reached by wsl.exe: a guest fish writes its history file
@@ -3175,7 +3177,7 @@ export class PtyHandler {
       // re-exposes ORCA_INCOGNITO, minting no scoped history file, since revivedEnv carries neither.
       applyRelayIncognitoEnv(spawnEnv)
       if (wslShell) {
-        addWslEnvKeys(spawnEnv, ['HISTFILE'])
+        addWslEnvKeys(spawnEnv, [...INCOGNITO_HISTORY_WSLENV_KEYS])
       }
     } else {
       if (

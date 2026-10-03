@@ -90,13 +90,18 @@ describe('relay incognito shell-history suppression', () => {
   const lastSpawnEnv = (): Record<string, string> =>
     mocks.mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
 
-  it('forces HISTFILE=/dev/null + HISTSIZE=0 + ORCA_INCOGNITO and mints no history file', async () => {
+  it('forces every shell history knob off and mints no history file', async () => {
     await dispatcher.callRequest('pty.spawn', spawnParams(true))
 
     const spawnEnv = lastSpawnEnv()
     expect(spawnEnv.HISTFILE).toBe('/dev/null')
     expect(spawnEnv.HISTSIZE).toBe('0')
     expect(spawnEnv.ORCA_INCOGNITO).toBe('1')
+    // macOS /etc/zshrc clobbers HISTFILE; the wrapper restores it from ORCA_HISTFILE, so without
+    // this a zsh pane records to ~/.zsh_history despite HISTFILE=/dev/null.
+    expect(spawnEnv.ORCA_HISTFILE).toBe('/dev/null')
+    // fish ignores HISTFILE entirely and keys off its own store; private mode is the only lever.
+    expect(spawnEnv.fish_private_mode).toBe('1')
     expect(existsSync(scopedHistoryFile)).toBe(false)
   })
 
@@ -126,6 +131,8 @@ describe('relay incognito shell-history suppression', () => {
 
     const revivedEnv = lastSpawnEnv()
     expect(revivedEnv.HISTFILE).toBe('/dev/null')
+    expect(revivedEnv.ORCA_HISTFILE).toBe('/dev/null')
+    expect(revivedEnv.fish_private_mode).toBe('1')
     expect(revivedEnv.ORCA_INCOGNITO).toBe('1')
     expect(existsSync(scopedHistoryFile)).toBe(false)
   })

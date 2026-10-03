@@ -23,6 +23,10 @@ import { resolveUnixShellPath } from '../providers/local-pty-utils'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
 import { addWslEnvKeys } from '../wsl-env'
+import {
+  applyIncognitoHistoryEnv,
+  INCOGNITO_HISTORY_WSLENV_KEYS
+} from '../../shared/incognito-history-env'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
@@ -63,21 +67,25 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   }
 
   protected withHistoryIsolation(opts: PtySpawnOptions): PtySpawnOptions {
-    if (opts.incognito) {
-      // Incognito ("no-session"): keep the shell's own command history off disk too (overriding any
-      // per-worktree HISTFILE isolation), and expose ORCA_INCOGNITO so the inner program — e.g. a
-      // private AI CLI — can detect it is private. Bash/zsh honor HISTFILE=/dev/null; HISTSIZE=0 is belt.
-      return {
-        ...opts,
-        env: { ...opts.env, ORCA_INCOGNITO: '1', HISTFILE: '/dev/null', HISTSIZE: '0' }
-      }
-    }
     const wslContext = resolveWslSessionContext({
       cwd: opts.cwd,
       sessionId: opts.sessionId,
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro
     })
+    if (opts.incognito) {
+      // Incognito ("no-session"): keep the shell's own command history off disk for EVERY shell ×
+      // platform — not just bash/zsh on Linux. The shared helper documents why each knob is needed
+      // (macOS zsh /etc/zshrc clobber via ORCA_HISTFILE, fish's own store via fish_private_mode), and
+      // WSL guests only inherit env listed in WSLENV. Returns before the per-worktree isolation
+      // below, so it mints no scoped history file either.
+      const env = { ...opts.env }
+      applyIncognitoHistoryEnv(env)
+      if (wslContext) {
+        addWslEnvKeys(env, [...INCOGNITO_HISTORY_WSLENV_KEYS])
+      }
+      return { ...opts, env }
+    }
     if (
       opts.attachOnly === true ||
       (opts.sessionId !== undefined && opts.isNewSession !== true) ||
