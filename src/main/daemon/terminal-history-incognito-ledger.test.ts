@@ -67,6 +67,41 @@ describe('IncognitoSessionLedger', () => {
     expect(ledger.suppressesCapture('priv')).toBe(true)
   })
 
+  it('rejects an array with a non-string id as untrusted (partial corruption), not a partial list', () => {
+    // Corruption that turns one id into null must not be silently dropped while the rest is trusted —
+    // the lost id would then be re-adopted and recorded. The whole file is rejected.
+    writeFileSync(join(dir, LEDGER_FILE), JSON.stringify(['sess-a', null, 'sess-b']))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const ledger = new IncognitoSessionLedger(dir)
+
+    expect(ledger.isUntrusted()).toBe(true)
+    expect(ledger.suppressesCapture('sess-a')).toBe(true) // untrusted → every re-adopt fails closed
+  })
+
+  it('keeps distrust DURABLE across restarts via the preserved sibling', () => {
+    writeFileSync(join(dir, LEDGER_FILE), 'not json')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const first = new IncognitoSessionLedger(dir)
+    expect(first.isUntrusted()).toBe(true)
+    first.mark('sess-live') // renames the corrupt file aside, writes a fresh VALID (but lossy) ledger
+
+    // A restart reads the now-valid ledger. It must STILL be untrusted because the preserved sibling
+    // signals the lost ids were never recovered — otherwise formerly-private re-adopts would record.
+    const afterRestart = new IncognitoSessionLedger(dir)
+    expect(afterRestart.isUntrusted()).toBe(true)
+    expect(afterRestart.suppressesCapture('some-readopt')).toBe(true)
+    expect(afterRestart.has('sess-live')).toBe(true) // the valid ledger's own ids still load
+
+    // Operator removes the preserved sibling once no private session is at risk → distrust clears.
+    for (const name of readdirSync(dir).filter((n) => n.startsWith(`${LEDGER_FILE}.unreadable-`))) {
+      rmSync(join(dir, name))
+    }
+    const recovered = new IncognitoSessionLedger(dir)
+    expect(recovered.isUntrusted()).toBe(false)
+    expect(recovered.suppressesCapture('some-readopt')).toBe(false)
+  })
+
   it('fails LOUD and preserves the file when an existing ledger is unreadable', () => {
     // A ledger that EXISTS but cannot be parsed hides WHICH sessions must stay unrecorded. Starting
     // empty+silent would let a restart re-adopt them as normal terminals and record them — fail-open.

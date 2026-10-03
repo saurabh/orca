@@ -1,7 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 
 const LEDGER_FILE = '.incognito-sessions.json'
+/** A corrupt/unreadable ledger is renamed to this prefix; its presence is the DURABLE distrust marker. */
+const PRESERVED_PREFIX = `${LEDGER_FILE}.unreadable-`
 
 /**
  * Durable "do-not-record" list of incognito ("no-session") session ids.
@@ -19,39 +28,61 @@ export class IncognitoSessionLedger {
   /** Subset of `ids` proven to be on disk, so a transient persist failure is retried, not forgotten. */
   private readonly persisted = new Set<string>()
   private readonly path: string
-  /** A ledger file EXISTED but could not supply a valid id list, so `has()` is no longer authoritative
-   *  (the do-not-record ids are lost). Stays true for this process's life so re-adopts fail closed. */
+  /** `has()` is no longer authoritative (the do-not-record ids are lost or incomplete), so re-adopts
+   *  must fail closed. Set from a corrupt load AND from a preserved sibling, so distrust is DURABLE
+   *  across restarts — not just for this process's life. */
   private untrusted = false
-  /** The one-time preserve-rename of an untrusted file has run (so persist() does not rename repeatedly). */
-  private preservedCorrupt = false
+  /** This load read a corrupt MAIN ledger that still needs renaming aside (persist() does it once). A
+   *  pre-existing sibling means preservation already happened, so the valid main file is NOT renamed. */
+  private corruptMainPending = false
 
   constructor(basePath: string) {
     this.path = join(basePath, LEDGER_FILE)
-    if (!existsSync(this.path)) {
-      return // ABSENT file = genuine first run; stay empty and silent.
+    // Durable distrust: a `.unreadable-*` sibling preserved by a PAST corruption means the id list may
+    // still be incomplete (the lost ids were never recovered). Honour it on every load so a restart
+    // after corruption keeps failing closed — the in-memory flag alone would reset on restart, letting
+    // the fresh-but-lossy ledger be trusted and formerly-private re-adopts record.
+    if (this.hasPreservedSibling()) {
+      this.untrusted = true
     }
-    try {
-      const parsed = JSON.parse(readFileSync(this.path, 'utf8'))
-      if (!Array.isArray(parsed)) {
-        throw new Error('ledger is not a JSON array of ids')
-      }
-      for (const id of parsed) {
-        if (typeof id === 'string') {
+    if (existsSync(this.path)) {
+      try {
+        const parsed = JSON.parse(readFileSync(this.path, 'utf8'))
+        if (!Array.isArray(parsed)) {
+          throw new Error('ledger is not a JSON array of ids')
+        }
+        for (const id of parsed) {
+          // A non-string element means corruption damaged the array; the id list can no longer be
+          // trusted as complete, so reject the whole file rather than accept a partial list.
+          if (typeof id !== 'string') {
+            throw new Error('ledger contains a non-string id')
+          }
           this.ids.add(id)
           // Loaded from disk → already durable; do not re-persist these on the next mark().
           this.persisted.add(id)
         }
+      } catch {
+        // A ledger that EXISTS but is unreadable / not a valid id array is a privacy hazard, not a
+        // benign empty start: the ids of the sessions to keep NOT recording are now unknown, so a
+        // re-adopted terminal would be treated as normal and recorded. Mark untrusted (fail CLOSED
+        // for re-adopts, see HistoryManager) and preserve the file (see persist()) as the durable marker.
+        this.untrusted = true
+        this.corruptMainPending = true
       }
-    } catch {
-      // A ledger that EXISTS but is unreadable OR not a valid id array is a privacy hazard, not a
-      // benign empty start: the ids of the sessions to keep NOT recording are now unknown, so a
-      // re-adopted terminal would be treated as normal and recorded. Mark the ledger untrusted so
-      // every re-adopt fails CLOSED (see HistoryManager), fail LOUD, and preserve the file
-      // (see persist()) so it is not clobbered and can be recovered.
-      this.untrusted = true
+    }
+    if (this.untrusted) {
       console.error(
-        `[history] incognito ledger at ${this.path} exists but is unreadable/invalid — its private-session ids are lost; re-adopted terminals will NOT be recorded until a clean restart`
+        `[history] incognito ledger at ${this.path} is unreadable/invalid or a prior corruption was preserved — its private-session ids may be lost; re-adopted terminals will NOT be recorded. Remove ${this.path}.unreadable-* once you have confirmed no private session is at risk.`
       )
+    }
+  }
+
+  /** Does a preserved `.unreadable-*` sibling from a past corruption exist next to the ledger? */
+  private hasPreservedSibling(): boolean {
+    try {
+      return readdirSync(dirname(this.path)).some((name) => name.startsWith(PRESERVED_PREFIX))
+    } catch {
+      return false
     }
   }
 
@@ -106,14 +137,14 @@ export class IncognitoSessionLedger {
   private persist(): boolean {
     try {
       mkdirSync(dirname(this.path), { recursive: true })
-      // Preserve an untrusted ledger before the first overwrite clobbers it: its ids may be
-      // recoverable, and destroying the only copy would turn a readable-later file into a lost one.
-      // `untrusted` itself stays set (re-adopts keep failing closed until a clean restart); this only
-      // guards the rename so it runs once.
-      if (this.untrusted && !this.preservedCorrupt) {
-        this.preservedCorrupt = true
+      // Preserve a corrupt MAIN ledger before the first overwrite clobbers it: its ids may be
+      // recoverable, and the renamed sibling is ALSO the durable distrust marker that keeps future
+      // loads failing closed (see constructor). Only the main file this load found corrupt is renamed
+      // — never a valid-but-lossy ledger written after a prior corruption.
+      if (this.corruptMainPending) {
+        this.corruptMainPending = false
         try {
-          renameSync(this.path, `${this.path}.unreadable-${Date.now()}`)
+          renameSync(this.path, join(dirname(this.path), `${PRESERVED_PREFIX}${Date.now()}`))
         } catch {
           // Already gone / un-renamable; nothing to preserve.
         }
