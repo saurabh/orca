@@ -265,6 +265,40 @@ describe('HistoryManager', () => {
       expect(existsSync(join(dir, getHistorySessionDirName(sessionId)))).toBe(false)
     })
 
+    it('surfaces a ledger persistence failure instead of silently continuing without restart suppression', async () => {
+      // The durable ledger is the ONLY thing that keeps this session incognito across a restart. If
+      // it cannot be written, a later daemon can re-adopt the id without the flag and start recording,
+      // so a swallowed write must become a loud write-error — not a false success. Force the failure
+      // by making the base dir read-only so the ledger's tmp+rename cannot land.
+      const failDir = createTestDir()
+      const writeErrors: [string, Error][] = []
+      const onWriteError = (sessionId: string, error: Error): void => {
+        writeErrors.push([sessionId, error])
+      }
+      const failing = new HistoryManager(failDir, { onWriteError })
+      chmodSync(failDir, 0o500)
+      try {
+        await failing.openSession('incognito-nodurable', {
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          incognito: true
+        })
+
+        expect(writeErrors).toHaveLength(1)
+        expect(writeErrors[0][0]).toBe('incognito-nodurable')
+        // The session is disabled for this process too, so even in-memory appends stay no-ops.
+        expect(failing.isSessionDisabled('incognito-nodurable')).toBe(true)
+        // No writer/dir was created, and the (unwritable) ledger did not appear.
+        expect(failing.hasWriter('incognito-nodurable')).toBe(false)
+        expect(existsSync(join(failDir, '.incognito-sessions.json'))).toBe(false)
+      } finally {
+        chmodSync(failDir, 0o700)
+        await failing.dispose()
+        rmSync(failDir, { recursive: true, force: true })
+      }
+    })
+
     it('stays incognito across a restart: a fresh manager on the same dir records nothing on re-adopt', async () => {
       const sessionId = 'incognito-persist'
       await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24, incognito: true })

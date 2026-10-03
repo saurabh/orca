@@ -67,8 +67,16 @@ export class HistoryManager {
     // Why: an incognito terminal never touches disk — mark it, then stop before
     // ensurePrivateDir/meta.json/writer creation (releasing any freeze) so no session tree appears.
     if (opts.incognito || this.incognito.has(sessionId)) {
-      this.incognito.mark(sessionId)
-      return this.abandonRecoveryFreeze(opts.recoveryFreeze)
+      // Why surface a failed mark: the ledger is the only durable restart-suppression this
+      // incognito session has. If it could not be written, a later daemon can re-adopt this id
+      // without the flag and start recording — so route the failure through handleWriteError, which
+      // disables the session for this process and notifies the daemon, rather than silently pretend
+      // durability held. No writer or session dir is created either way.
+      if (!this.incognito.mark(sessionId)) {
+        this.handleWriteError(sessionId, new Error('incognito_ledger_persist_failed'))
+      }
+      this.abandonRecoveryFreeze(opts.recoveryFreeze)
+      return
     }
     let recoveryFreeze = opts.recoveryFreeze
     try {
@@ -348,5 +356,4 @@ export class HistoryManager {
   private sessionDir(sessionId: string): string {
     return join(this.basePath, getHistorySessionDirName(sessionId))
   }
-
 }
