@@ -105,6 +105,28 @@ export function injectRelayHistoryEnv(
   }
 }
 
+/**
+ * Suppress every on-disk shell-history trace for an incognito ("no-session") PTY on the REMOTE host,
+ * and expose ORCA_INCOGNITO so the inner program (e.g. a private AI CLI) can detect it is private.
+ *
+ * This is the relay's mirror of the desktop/daemon `withHistoryIsolation` incognito branch in
+ * `src/main/daemon/daemon-pty-session-spawn.ts`: bash/zsh honour HISTFILE=/dev/null (HISTSIZE=0 is
+ * belt), overriding any per-worktree HISTFILE isolation. The relay owns no scrollback file
+ * (output.log/checkpoint live only in the local daemon's HistoryManager), so the shell's own command
+ * history is the sole on-disk leak the relay path must plug. Callers must also skip
+ * injectRelayHistoryEnv/injectRelayFishHistoryEnv for an incognito spawn so no scoped history file is
+ * minted either — matching the daemon, which returns before its own HISTFILE isolation runs.
+ *
+ * fish is deliberately not special-cased here, exactly as the daemon leaves it: fish keeps its own
+ * history store and HISTFILE does not govern it, so an incognito fish pane is no worse off on the
+ * relay than it is locally.
+ */
+export function applyRelayIncognitoEnv(env: Record<string, string>): void {
+  env.ORCA_INCOGNITO = '1'
+  env.HISTFILE = '/dev/null'
+  env.HISTSIZE = '0'
+}
+
 export function deleteRelayHistory(worktreeId: string): void {
   try {
     const rootStat = lstatSync(HISTORY_ROOT)
