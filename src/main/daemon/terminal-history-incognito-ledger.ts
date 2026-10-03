@@ -19,11 +19,14 @@ export class IncognitoSessionLedger {
   /** Subset of `ids` proven to be on disk, so a transient persist failure is retried, not forgotten. */
   private readonly persisted = new Set<string>()
   private readonly path: string
+  /** True when a ledger file EXISTED at startup but could not be read/parsed — a fail-OPEN risk. */
+  private loadFailed = false
 
   constructor(basePath: string) {
     this.path = join(basePath, LEDGER_FILE)
+    const existed = existsSync(this.path)
     try {
-      if (existsSync(this.path)) {
+      if (existed) {
         const parsed = JSON.parse(readFileSync(this.path, 'utf8'))
         if (Array.isArray(parsed)) {
           for (const id of parsed) {
@@ -36,7 +39,15 @@ export class IncognitoSessionLedger {
         }
       }
     } catch {
-      // Best-effort: a corrupt/unreadable ledger starts empty rather than blocking startup.
+      // A ledger that EXISTS but cannot be read is a privacy hazard, not a benign empty start:
+      // its ids (the sessions to keep NOT recording) are now unknown, so a restart would re-adopt
+      // them as normal terminals and begin recording. Fail LOUD, and preserve the unreadable file
+      // (see persist()) so it is not silently clobbered and can be recovered. An ABSENT file is the
+      // genuine first-run case and stays silent.
+      this.loadFailed = true
+      console.error(
+        `[history] incognito ledger at ${this.path} exists but is unreadable — previously-private sessions may start recording after a restart`
+      )
     }
   }
 
@@ -73,6 +84,16 @@ export class IncognitoSessionLedger {
   private persist(): boolean {
     try {
       mkdirSync(dirname(this.path), { recursive: true })
+      // Preserve a ledger we failed to read before the first overwrite clobbers it: its ids may be
+      // recoverable, and destroying the only copy would turn a readable-later file into a lost one.
+      if (this.loadFailed) {
+        try {
+          renameSync(this.path, `${this.path}.unreadable-${Date.now()}`)
+        } catch {
+          // Already gone / un-renamable; nothing to preserve.
+        }
+        this.loadFailed = false
+      }
       // Why tmp+rename: a torn write must not corrupt the ledger; a stale-but-whole one is recoverable.
       const tmp = `${this.path}.tmp`
       writeFileSync(tmp, JSON.stringify([...this.ids]), { mode: 0o600 })
@@ -85,7 +106,12 @@ export class IncognitoSessionLedger {
       return true
     } catch {
       // Durability failed. In-memory gating still holds for THIS process, but a restart would not be
-      // suppressed, so the caller must be told rather than left assuming the write succeeded.
+      // suppressed. Fail LOUD here — the single persist chokepoint — so the loss is surfaced even
+      // when the HistoryManager was built with no onWriteError (production constructs it bare); the
+      // caller is told via the `false` return rather than left assuming the write succeeded.
+      console.error(
+        `[history] incognito ledger at ${this.path} could NOT be persisted — a daemon/app restart may re-adopt these private sessions and start recording them`
+      )
       return false
     }
   }
