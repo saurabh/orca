@@ -16,9 +16,7 @@ import {
   AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT
 } from './orca-runtime-core'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { agentDefaultsToIncognito } from '../../shared/tui-agent-incognito'
-import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import { buildIncognitoAwareAgentStartupPlan } from '../../shared/agent-incognito-startup-plan'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type {
   AgentSessionCreateOperation,
@@ -150,27 +148,21 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
         throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
       }
-      const startupArgs = resolveAgentStartupPlanInputs({
+      // Why: the structured-session path bypasses resolveAgentTerminalCreateOptions, so it funnels
+      // through the shared incognito-aware assembler that adds a capable agent's native --no-session.
+      const sessionOptions = this.toAgentSessionOptions(request.launchPreferences)
+      const startup = buildIncognitoAwareAgentStartupPlan({
         agent: request.agent,
         settings,
         platform: this.getAgentLaunchPlatformForWorkspace(workspace),
         // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
         // shape must match the PTY route this scope already resolved.
         isRemote: Boolean(workspace.connectionId),
-        // Why: the structured-session path builds its own plan, so it adds the native ephemeral flag
-        // for a capable incognito agent itself — resolveAgentTerminalCreateOptions never runs here.
-        incognito: agentDefaultsToIncognito(request.agent, settings.terminalIncognitoAgents),
         ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
-        sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
+        ...(sessionOptions ? { sessionOptions } : {}),
+        ...(request.promptDelivery !== undefined ? { promptDelivery: request.promptDelivery } : {}),
+        prompt: request.prompt ?? ''
       })
-      const startup =
-        request.promptDelivery === 'draft'
-          ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
-          : buildAgentStartupPlan({
-              ...startupArgs,
-              prompt: request.prompt ?? '',
-              allowEmptyPromptLaunch: true
-            })
       if (!startup) {
         throw new Error('agent_session_identity_required')
       }
